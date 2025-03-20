@@ -1,6 +1,9 @@
 require("dotenv").config(); 
 const express = require("express");
 const mysql = require("mysql2");
+const validateUser = require("./middlewares/validationMiddleware");
+const { param } = require("express-validator");
+const { validationResult } = require("express-validator");
 
 const app = express();
 const port =  process.env.PORT || 3000;
@@ -42,32 +45,58 @@ app.get("/users", (req, res) => {
 });
 
 // Crear usuarios 
-app.post("/users", (req, res) =>{
-    const {name, lastname, email} = req.body;
-    
-    if (!name || !lastname || !email) {
-        return res.status(400).json({ error: "Nombre, Apellido y correo son OBLIGATORIOS" });
-    }
+app.post("/users", validateUser, (req, res) => {
+    const { name, lastname, email } = req.body;
 
-    const sql = "INSERT INTO users (name, lastname, email) VALUES (?, ?, ?)";
-    db.query(sql, [name, lastname, email], (err, results) => {
+    // Verificar si el correo ya existe
+    const checkEmailQuery = "SELECT * FROM users WHERE email = ?";
+    db.query(checkEmailQuery, [email], (err, results) => {
         if (err) {
-            return res.status(500).json({ error: "Error al crear usuario"});
+            return res.status(500).json({ error: "Error al verificar el correo" });
         }
-        res.status(201).json({ id: results.insertId, name, lastname, email});
-    });
- 
-});
+        if (results.length > 0) {
+            return res.status(400).json({ error: "El correo ya está registrado" });
+        }
 
-// Eliminar usuarios 
-app.delete("/users/:id", (req, res) =>{
+        // Insertar usuario si no existe
+        const insertUserQuery = "INSERT INTO users (name, lastname, email) VALUES (?, ?, ?)";
+        db.query(insertUserQuery, [name, lastname, email], (err, result) => {
+            if (err) {
+                return res.status(500).json({ error: "Error al crear usuario" });
+            }
+            res.status(201).json({ 
+                message: "Usuario creado exitosamente",
+                id: result.insertId, 
+                name, 
+                lastname, 
+                email 
+            });
+        });
+    });
+});
+ 
+// Eliminar usuarios con verificación previa
+app.delete("/users/:id", (req, res) => {
     const userId = req.params.id;
 
-    db.query("DELETE FROM users WHERE id = ?", [userId], (err, result) =>{
+    // Verificar si el usuario existe antes de eliminar
+    db.query("SELECT * FROM users WHERE id = ?", [userId], (err, results) => {
         if (err) {
-            return res.status(500).json({ error: "Error al eliminar usuario"});
+            return res.status(500).json({ error: "Error al verificar usuario" });
         }
-        res.json({ message: `Usuario con ID ${userId} eliminado`});
+
+        // Si no existe el usuario, devolver error 404
+        if (results.length === 0) {
+            return res.status(404).json({ error: `No se encontró un usuario con ID ${userId}` });
+        }
+
+        // Si existe, proceder a eliminarlo
+        db.query("DELETE FROM users WHERE id = ?", [userId], (err, result) => {
+            if (err) {
+                return res.status(500).json({ error: "Error al eliminar usuario" });
+            }
+            res.json({ message: `Usuario con ID ${userId} eliminado` });
+        });
     });
 });
 
