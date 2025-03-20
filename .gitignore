@@ -1,0 +1,14 @@
+# Evitar subir variables de entorno
+.env
+
+# Evitar subir módulos de Node.js
+node_modules/
+
+# Evitar archivos de logs
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# Evitar archivos del sistema
+.DS_Store
+Thumbs.db
